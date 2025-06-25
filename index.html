@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IA Scoring: Diagnóstico Estratégico LAiB</title>
+    <!-- DM Sans font from Google Fonts, as per brand manual -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: LAiB Brand Palette (Black, White, Red #F52525) and Complementary Grey Palette -->
+    <!-- Application Structure Plan: He diseñado una aplicación de una sola página con una estructura de "viaje guiado" y un enfoque infográfico para los resultados. Comienza con un cuestionario interactivo organizado en pasos claros con navegación explícita (botones Siguiente/Anterior en lugar de solo pestañas) y validación de progreso. Finalmente, culmina en un panel de resultados dinámico que muestra un score absoluto de 0 a 100 y su nivel de madurez, sin comparaciones con la industria. Este flujo interactivo convierte un documento estático en una herramienta de diagnóstico participativa y altamente visual. La navegación entre pasos guía al usuario, y los resultados comparativos ofrecen un "Product Discovery" avanzado, mostrando la posición de la empresa frente al promedio de la industria. -->
+    <!-- Visualization & Content Choices:
+        - Logo y Branding: Report Info -> Logo LAiB y colores de marca (principal y complementaria). Goal -> Establecer identidad visual. Viz/Presentation Method -> HTML con texto y clases Tailwind para colores. Interaction -> N/A. Justification -> Respetar la identidad de marca es crucial. Library/Method -> HTML, Tailwind CSS.
+        - Cuestionario: Report Info -> Preguntas de los 5 módulos. Goal -> Recopilar datos de entrada del usuario de forma guiada. Viz/Presentation Method -> Tarjetas con preguntas y opciones de radio estilizadas, agrupadas por módulo en un flujo paso a paso con botones de navegación. Interaction -> El usuario selecciona una opción por pregunta y avanza/retrocede entre módulos. Los clics se registran en JS. Justification -> El flujo paso a paso es menos abrumador y mejora la tasa de finalización. Library/Method -> HTML, Tailwind CSS, Vanilla JS.
+        - Puntuación de Módulos (Absoluta): Report Info -> Scores calculados para cada uno de los 5 módulos del usuario. Goal -> Mostrar el rendimiento relativo entre áreas estratégicas de la propia empresa. Viz/Presentation Method -> Gráfico de Radar con un solo dataset (usuario). Interaction -> El tooltip al pasar el ratón muestra la puntuación exacta. Justification -> Un gráfico de radar es ideal para visualizar múltiples dimensiones, mostrando la "forma" de las fortalezas y debilidades internas. Library/Method -> Chart.js (Canvas).
+        - Puntuación General y Nivel: Report Info -> Puntuación general del usuario y nivel de madurez. Goal -> Proporcionar un resumen de alto nivel del rendimiento absoluto. Viz/Presentation Method -> Números grandes y texto descriptivo. Interaction -> N/A. Justification -> Clara y concisa para CEOs, enfocándose en la posición propia de la empresa. Library/Method -> HTML, Tailwind CSS, Vanilla JS.
+        - Recomendaciones: Report Info -> Contenido de "De las Respuestas a los Insights". Goal -> Proporcionar orientación y próximos pasos personalizados. Viz/Presentation Method -> Bloques de texto dinámicos. Interaction -> El contenido se genera y muestra en función de las puntuaciones del usuario. Justification -> El texto personalizado basado en las respuestas del usuario hace que los consejos sean relevantes y accionables. Library/Method -> Vanilla JS.
+        - Mobile Friendly & Visual Appeal: Ensure charts and content scale well on all devices. Use responsive design principles (Tailwind's breakpoints, fluid units). Enhance visual "coolness" through subtle styling and clear information hierarchy. Call to action added at the end of results. All blocks are aligned with professional precision, using consistent spacing and shadows.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: #f8fafc; /* light neutral background */
+            color: #1a202c; /* neutral dark text */
+        }
+        /* LAiB Brand Colors */
+        .text-lab-red { color: #F52525; }
+        .bg-lab-red { background-color: #F52525; }
+        .border-lab-red { border-color: #F52525; }
+        .hover\:bg-lab-red-darker:hover { background-color: #d11a1a; } /* A slightly darker red for hover */
+        
+        /* Complementary Grey Palette */
+        .bg-lab-dark-grey { background-color: #191919; }
+        .text-lab-light-grey { color: #E6E6E6; }
+        .bg-lab-medium-dark-grey { background-color: #333333; }
+        .hover\:bg-lab-darkest-grey:hover { background-color: #191919; }
+        .border-lab-medium-dark-grey { border-color: #333333; }
+        .text-lab-medium-grey { color: #666666; }
+        .border-lab-light-grey { border-color: #D2D2D2; } /* From complementary palette: #D2D2D2 */
+
+
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            color: #1a202c; /* Neutral dark text for active tab */
+            border-bottom-color: #333333; /* Dark grey border for active tab */
+            font-weight: 700; /* Make active tab bold */
+        }
+        .question-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .question-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            width: 100%; /* Take full width of parent */
+            max-width: 550px; /* Max width on larger screens */
+            height: 40vh; /* Responsive height */
+            max-height: 400px; /* Max height to prevent excessive size */
+        }
+        @media (max-width: 767px) { /* Mobile specific adjustments */
+            .chart-container {
+                height: 45vh; /* Slightly more height on mobile for readability */
+                max-height: 350px;
+            }
+        }
+        @media (min-width: 768px) { /* Desktop/Tablet adjustments */
+            .chart-container {
+                height: 45vh; /* Slightly taller on desktop */
+                max-height: 450px;
+            }
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        input[type="radio"]:checked + label {
+            background-color: #333333; /* Dark grey from new palette */
+            border-color: #333333; /* Dark grey from new palette */
+            color: white; /* White text for contrast */
+            font-weight: 600;
+        }
+        /* Removed .overall-score-comparison-chart-container as comparison chart is removed */
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="app" class="container mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+
+        <header class="text-center mb-10 pb-8 bg-lab-dark-grey text-white rounded-b-3xl shadow-xl">
+            <div class="pt-8">
+                <!-- LAiB text placeholder for the logo -->
+                <p class="text-5xl md:text-6xl font-bold font-mono mx-auto h-12 md:h-16 mb-4 flex items-center justify-center">LAiB</p>
+                <p class="text-lg md:text-xl font-light tracking-widest uppercase mt-2 text-lab-light-grey">Artificial Intelligence Laboratory</p>
+            </div>
+            <h1 class="text-4xl md:text-5xl font-bold mt-8">IA Scoring</h1>
+            <p class="mt-2 text-lg opacity-90 text-lab-light-grey">Herramienta de Diagnóstico Estratégico para Empresas</p>
+        </header>
+
+        <main>
+            <section id="questionnaire" class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border-t-4 border-lab-light-grey">
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">Cuestionario Paso a Paso</h2>
+                <p class="text-slate-500 mb-6">Evalúe cada afirmación en una escala de 1 (totalmente en desacuerdo) a 5 (totalmente de acuerdo).</p>
+
+                <div class="border-b border-gray-200 mb-6">
+                    <nav id="tabs" class="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto pb-2" aria-label="Tabs">
+                    </nav>
+                </div>
+                
+                <div id="questionnaire-content">
+                    </div>
+
+                <div class="mt-8 flex justify-between items-center">
+                    <button id="prev-step" class="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg hover:bg-gray-300 transition duration-300 shadow-md hidden">
+                        Anterior
+                    </button>
+                    <button id="next-step" class="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-800 transition duration-300 shadow-md">
+                        Siguiente
+                    </button>
+                    <button id="calculate-score" class="bg-lab-medium-dark-grey text-white font-bold py-3 px-8 rounded-lg hover:bg-lab-darkest-grey transition duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-lab-medium-dark-grey focus:ring-offset-2 hidden">
+                        Calcular Mi Score de IA
+                    </button>
+                </div>
+                <p id="validation-message" class="text-lab-red text-center mt-4 hidden">Por favor, responda todas las preguntas de este módulo antes de continuar.</p>
+            </section>
+
+            <section id="results" class="hidden mt-12 bg-white p-6 sm:p-8 rounded-2xl shadow-lg border-t-4 border-lab-light-grey">
+                <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">Sus Resultados de Madurez de IA</h2>
+                <p class="text-center text-slate-600 mb-8">Aquí está la evaluación de la madurez de IA de su empresa (puntuación del 0 al 100).</p>
+                
+                <div class="grid md:grid-cols-2 lg:grid-cols-2 gap-8 items-center mb-12">
+                    <div class="flex flex-col items-center justify-center bg-slate-50 p-6 rounded-lg shadow-xl border border-slate-200">
+                        <p class="text-slate-600 text-lg">Su Puntuación General</p>
+                        <p id="overall-score" class="text-7xl font-bold text-lab-red my-2">0</p>
+                        <p id="overall-level" class="text-xl font-semibold text-slate-700">Inicial</p>
+                    </div>
+                    
+                    <div class="chart-container bg-slate-50 p-4 rounded-lg shadow-xl border border-slate-200 flex flex-col justify-center items-center">
+                        <h3 class="text-xl font-semibold text-slate-700 mb-4 text-center">Detalle por Módulo</h3>
+                        <canvas id="radar-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid gap-8 items-start mb-12"> 
+                    <div class="bg-slate-50 p-6 rounded-lg shadow-xl border border-slate-200 flex flex-col justify-between h-full"> 
+                        <h3 class="text-xl font-bold text-slate-800 mb-4">Análisis de la Madurez de su Empresa</h3>
+                        <div id="comparison-analysis" class="space-y-4 text-slate-600">
+                            </div>
+                    </div>
+                </div>
+
+                <div id="recommendations" class="mt-12">
+                    <h3 class="text-2xl font-bold text-slate-800 mb-4">Recomendaciones Accionables Personalizadas</h3>
+                    <div id="recommendations-content" class="space-y-4">
+                    </div>
+                </div>
+
+                <div class="mt-12 text-center bg-slate-50 p-8 rounded-2xl shadow-xl border border-slate-200">
+                    <p class="text-2xl font-bold text-slate-800 mb-6">Aplicá ahora y trae el futuro al presente de tu empresa</p>
+                    <button class="bg-lab-medium-dark-grey text-white font-bold py-4 px-10 rounded-lg hover:bg-lab-darkest-grey transition duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-lab-medium-dark-grey focus:ring-offset-2 text-lg" onclick="window.location.href='https://form.typeform.com/to/ESKx4jnG'">
+                        Aplicar al LAiB
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const questionsData = [
+        {
+            module: "Visión y Estrategia",
+            objective: "Evaluar la claridad y el compromiso ejecutivo con la IA.",
+            questions: [
+                "¿Su empresa tiene una estrategia clara de IA que se alinea con sus metas de negocio?",
+                "¿Hay un líder o equipo directivo claramente responsable de impulsar la IA en su organización?",
+                "¿Su empresa asigna recursos suficientes (financieros y humanos) para proyectos de IA?"
+            ],
+            recommendations: {
+                low: "Su empresa necesita una visión más definida para la IA. Es clave alinear la IA con los objetivos de negocio y asignar un responsable con recursos para liderar la iniciativa. Esto es el primer paso para una transformación exitosa.",
+                medium: "La visión de IA está presente, pero puede faltar formalización o recursos consistentes. Trabaje en integrar la IA más profundamente en su estrategia general y asegure que el liderazgo tenga la autoridad para ejecutarla, demostrando su valor con métricas claras.",
+                high: "Su empresa demuestra un liderazgo y una visión estratégica sólidos en IA. Mantenga esta ventaja explorando cómo la IA puede abrir nuevas oportunidades de negocio y asegurar que la estrategia se adapte proactivamente a los cambios del mercado."
+            }
+        },
+        {
+            module: "Madurez Tecnológica y de Datos",
+            objective: "Analizar la preparación de su infraestructura y datos para la IA.",
+            questions: [
+                "¿Sus datos están organizados, son de buena calidad y fácilmente accesibles para proyectos de IA?",
+                "¿Sus equipos tienen las herramientas y plataformas de IA necesarias para desarrollar y desplegar soluciones?",
+                "¿Se aseguran de que la información usada en IA sea fiable, segura y cumpla con las normas?"
+            ],
+            recommendations: {
+                low: "Las limitaciones en sus datos e infraestructura tecnológica son un freno para la IA. Priorice la mejora de la calidad de sus datos, la organización de su información y la inversión en herramientas básicas de IA. Una base de datos sólida es indispensable para el éxito de cualquier proyecto de IA.",
+                medium: "Su base tecnológica es funcional pero necesita mejoras para escalar la IA. Invierta en optimizar sus procesos de datos, automatizar el control de calidad y proporcionar a sus equipos herramientas de IA más avanzadas. Evalúe la escalabilidad de su infraestructura para futuras necesidades.",
+                high: "Su infraestructura y datos son una fortaleza. Enfóquese en la innovación continua, como el procesamiento de datos en tiempo real o el uso de IA para gestionar su propia infraestructura, para mantener una ventaja competitiva y soportar modelos de IA aún más complejos."
+            }
+        },
+        {
+            module: "Talento y Cultura Organizacional",
+            objective: "Evaluar las capacidades humanas y el ambiente para la innovación en IA.",
+            questions: [
+                "¿Su empresa cuenta con el talento interno (personas con conocimientos) para llevar a cabo proyectos de IA?",
+                "¿Su empresa capacita activamente a sus empleados en habilidades relacionadas con la IA?",
+                "¿La cultura de su empresa fomenta la experimentación y el aprendizaje con la IA?"
+            ],
+            recommendations: {
+                low: "La falta de talento y una cultura resistente pueden paralizar sus iniciativas de IA. Es urgente desarrollar un plan para atraer talento clave y capacitar a sus empleados existentes. Fomente un ambiente donde la experimentación y el aprendizaje, incluso de los errores, sean bienvenidos.",
+                medium: "Está construyendo un equipo y una cultura adecuados para la IA. Acelere los programas de capacitación y cree espacios para la colaboración y el intercambio de conocimientos. Asegúrese de que los líderes promuevan una mentalidad de aprendizaje y adaptabilidad en toda la organización.",
+                high: "Su talento y cultura son un pilar fundamental para la IA. Mantenga este nivel de excelencia creando centros internos de experiencia, fomentando la investigación y explorando programas que permitan a sus empleados innovar con IA. Esto le ayudará a atraer y retener a los mejores profesionales."
+            }
+        },
+        {
+            module: "Casos de Uso y ROI",
+            objective: "Analizar la aplicación de IA y el retorno de inversión.",
+            questions: [
+                "¿Ha identificado y priorizado proyectos de IA que generen un impacto claro en el negocio (ej. más ventas, menos costos)?",
+                "¿Su empresa mide regularmente el impacto (ROI) de sus proyectos de IA?",
+                "¿Su empresa busca activamente nuevas oportunidades o modelos de negocio gracias a la IA?"
+            ],
+            recommendations: {
+                low: "Es crucial vincular la IA a resultados de negocio tangibles. Inicie identificando proyectos de IA con alto potencial de retorno y defina cómo medirá su éxito desde el principio. Comience con pilotos pequeños para demostrar valor rápidamente.",
+                medium: "Tiene un buen entendimiento de los posibles usos de la IA, pero la medición de resultados puede ser más rigurosa. Formalice cómo mide el impacto financiero y estratégico de sus proyectos, y use esa información para optimizar su cartera de iniciativas de IA.",
+                high: "Su empresa es experta en encontrar y aprovechar el valor de la IA. Impulse la innovación buscando activamente nuevas oportunidades de negocio o la creación de productos/servicios que solo la IA puede habilitar. Considere un laboratorio de innovación dedicado a explorar estas fronteras."
+            }
+        },
+        {
+            module: "Gobernanza y IA Responsable",
+            objective: "Asegurar el uso ético y seguro de la IA.",
+            questions: [
+                "¿Su empresa tiene principios claros sobre el uso ético y responsable de la IA (ej. privacidad, transparencia)?",
+                "¿Evalúa los riesgos de seguridad y privacidad antes y después de usar sistemas de IA?",
+                "¿Sus procesos de IA son transparentes y se puede entender cómo toman decisiones?"
+            ],
+            recommendations: {
+                low: "La falta de marcos éticos y de gobernanza de la IA es un riesgo significativo. Es vital definir principios claros de uso, establecer políticas de privacidad y seguridad de datos, e implementar procesos para detectar y mitigar sesgos en sus modelos. Una IA irresponsable puede dañar la reputación y acarrear problemas legales.",
+                medium: "Ha comenzado a abordar la IA de forma responsable. Formalice sus políticas éticas y de gobernanza, integre la evaluación de riesgos en el ciclo de vida de la IA y trabaje en hacer que sus modelos sean más explicables. Considere un comité de revisión ética para la IA.",
+                high: "Su compromiso con la IA responsable es ejemplar. Posicione a su organización como un líder en el uso ético de la IA, participando en la definición de estándares de la industria y promoviendo la transparencia. Utilice la IA responsable como un diferenciador clave que genera confianza y valor para su marca."
+            }
+        }
+    ];
+
+    const tabsContainer = document.getElementById('tabs');
+    const questionnaireContent = document.getElementById('questionnaire-content');
+    const userAnswers = {};
+    let currentModuleIndex = 0;
+    let radarChart = null;
+    const validationMessage = document.getElementById('validation-message');
+
+    const prevStepButton = document.getElementById('prev-step');
+    const nextStepButton = document.getElementById('next-step');
+    const calculateScoreButton = document.getElementById('calculate-score');
+
+    // Function to build the tab buttons initially
+    function buildTabs() {
+        tabsContainer.innerHTML = ''; // Clear existing tabs if any
+        questionsData.forEach((moduleData, moduleIndex) => {
+            const tabButton = document.createElement('button');
+            tabButton.className = `nav-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`; // Base classes
+            tabButton.textContent = moduleData.module;
+            tabButton.setAttribute('role', 'tab');
+            tabButton.onclick = () => {
+                currentModuleIndex = moduleIndex;
+                updateNavigationButtons();
+                renderModuleContent();
+                updateTabVisuals(); // Update tab visuals on click
+            };
+            tabsContainer.appendChild(tabButton);
+        });
+    }
+
+    // Function to update the visual state of the tabs (active/inactive)
+    function updateTabVisuals() {
+        Array.from(tabsContainer.children).forEach((tabButton, index) => {
+            if (index === currentModuleIndex) {
+                tabButton.classList.add('active', 'text-slate-800', 'border-lab-medium-dark-grey');
+                tabButton.classList.remove('border-transparent', 'text-lab-medium-grey', 'hover:text-gray-700', 'hover:border-gray-300');
+            } else {
+                tabButton.classList.remove('active', 'text-slate-800', 'border-lab-medium-dark-grey');
+                tabButton.classList.add('border-transparent', 'text-lab-medium-grey', 'hover:text-gray-700', 'hover:border-gray-300');
+            }
+        });
+    }
+
+    function renderModuleContent() {
+        questionnaireContent.innerHTML = '';
+        const moduleData = questionsData[currentModuleIndex];
+        
+        const tabContent = document.createElement('div');
+        tabContent.className = `tab-content active`; // Always active for the current module
+        
+        let questionsHTML = `<p class="text-slate-600 mb-6 italic">${moduleData.objective}</p><div class="space-y-8">`;
+        moduleData.questions.forEach((q, qIndex) => {
+            const questionId = `m${currentModuleIndex}q${qIndex}`;
+            const existingAnswer = userAnswers[questionId];
+            questionsHTML += `
+                <div class="question-card bg-slate-50 p-6 rounded-lg shadow-sm border border-slate-200">
+                    <p class="font-semibold text-slate-800 mb-4">${qIndex + 1}. ${q}</p>
+                    <fieldset class="flex flex-wrap gap-2 justify-center">
+                        <legend class="sr-only">Puntuación para la pregunta ${qIndex + 1}</legend>
+                        ${[1,2,3,4,5].map(val => `
+                            <div>
+                                <input type="radio" name="${questionId}" id="${questionId}v${val}" value="${val}" class="sr-only" ${existingAnswer === val ? 'checked' : ''}>
+                                <label for="${questionId}v${val}" class="block cursor-pointer py-2 px-4 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">${val}</label>
+                            </div>
+                        `).join('')}
+                    </fieldset>
+                </div>
+            `;
+        });
+        questionsHTML += '</div>';
+        tabContent.innerHTML = questionsHTML;
+        questionnaireContent.appendChild(tabContent);
+        
+        // Re-attach event listeners for the newly rendered radio buttons
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            // Restore checked state for the current module's questions
+            const questionId = radio.name;
+            const value = parseInt(radio.value);
+            if (userAnswers[questionId] === value) {
+                radio.checked = true;
+            }
+
+            radio.addEventListener('change', (event) => {
+                userAnswers[event.target.name] = parseInt(event.target.value);
+                validationMessage.classList.add('hidden'); // Hide validation message on selection
+            });
+        });
+    }
+
+    function updateNavigationButtons() {
+        prevStepButton.classList.toggle('hidden', currentModuleIndex === 0);
+        nextStepButton.classList.toggle('hidden', currentModuleIndex === questionsData.length - 1);
+        calculateScoreButton.classList.toggle('hidden', currentModuleIndex !== questionsData.length - 1);
+    }
+
+    function validateCurrentModule() {
+        const moduleData = questionsData[currentModuleIndex];
+        for (let i = 0; i < moduleData.questions.length; i++) {
+            const questionId = `m${currentModuleIndex}q${i}`;
+            if (userAnswers[questionId] === undefined) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    prevStepButton.addEventListener('click', () => {
+        if (currentModuleIndex > 0) {
+            currentModuleIndex--;
+            renderModuleContent();
+            updateNavigationButtons();
+            updateTabVisuals(); // Update tab visuals
+            tabsContainer.children[currentModuleIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+
+    nextStepButton.addEventListener('click', () => {
+        if (!validateCurrentModule()) {
+            validationMessage.classList.remove('hidden');
+            return;
+        }
+        if (currentModuleIndex < questionsData.length - 1) {
+            currentModuleIndex++;
+            renderModuleContent();
+            updateNavigationButtons();
+            updateTabVisuals(); // Update tab visuals
+            tabsContainer.children[currentModuleIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+
+    function calculateScores() {
+        const scores = questionsData.map((moduleData, moduleIndex) => {
+            let total = 0;
+            moduleData.questions.forEach((q, qIndex) => {
+                const questionId = `m${moduleIndex}q${qIndex}`;
+                total += userAnswers[questionId] || 0;
+            });
+            const maxScore = moduleData.questions.length * 5;
+            const finalScore = (total / maxScore) * 100;
+            return Math.round(finalScore);
+        });
+
+        const overallScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
+        return { moduleScores: scores, overallScore };
+    }
+
+    function getLevel(score) {
+        if (score < 30) return "Experimentación Ad-Hoc";
+        if (score < 50) return "Adopción Oportunista";
+        if (score < 70) return "Integración Estratégica";
+        if (score < 90) return "Inteligencia Incrustada";
+        return "Empresa Impulsada por IA";
+    }
+
+    function displayResults(scores) {
+        const { moduleScores, overallScore } = scores;
+        
+        document.getElementById('results').classList.remove('hidden');
+        document.getElementById('overall-score').textContent = overallScore;
+        document.getElementById('overall-level').textContent = getLevel(overallScore);
+
+        const recommendationsContent = document.getElementById('recommendations-content');
+        recommendationsContent.innerHTML = '';
+        questionsData.forEach((data, index) => {
+            const score = moduleScores[index];
+            let category;
+            if (score < 40) category = 'low';
+            else if (score < 70) category = 'medium';
+            else category = 'high';
+            
+            const recommendationHTML = `
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-slate-800">${data.module} <span class="text-sm font-medium text-slate-500 ml-2">(Puntuación: ${score}/100)</span></h4>
+                    <p class="text-slate-600 mt-1">${data.recommendations[category]}</p>
+                </div>
+            `;
+            recommendationsContent.innerHTML += recommendationHTML;
+        });
+
+        const analysisDiv = document.getElementById('comparison-analysis');
+        analysisDiv.innerHTML = '';
+        const currentLevel = getLevel(overallScore);
+        analysisDiv.innerHTML += `<p>Su empresa se encuentra en el nivel de madurez de IA de **${currentLevel}** con una puntuación general de **${overallScore}%.**</p>`;
+        
+        if (currentLevel === "Experimentación Ad-Hoc") {
+            analysisDiv.innerHTML += `<p>En esta etapa, la IA se explora de manera informal en proyectos aislados. Existe un alto potencial para estructurar estos esfuerzos, establecer una visión clara y construir una base de datos sólida.</p>`;
+        } else if (currentLevel === "Adopción Oportunista") {
+            analysisDiv.innerHTML += `<p>Su organización está implementando IA en iniciativas específicas y por departamento. Para escalar, es crucial integrar estas soluciones, formalizar la gobernanza de datos y desarrollar talento interno.</p>`;
+        } else if (currentLevel === "Integración Estratégica") {
+            analysisDiv.innerHTML += `<p>La IA es un componente reconocido de su estrategia empresarial, con iniciativas integradas en funciones clave. El enfoque debe ser optimizar la escalabilidad, la medición del ROI y fomentar una cultura de IA más amplia en toda la organización.</p>`;
+        } else if (currentLevel === "Inteligencia Incrustada") {
+            analysisDiv.innerHTML += `<p>La IA está profundamente arraigada en los procesos centrales y en la toma de decisiones, impulsando un valor significativo. Ahora, la prioridad es la innovación continua, la exploración de nuevas oportunidades de negocio habilitadas por la IA y el liderazgo en prácticas de IA responsable.</p>`;
+        } else if (currentLevel === "Empresa Impulsada por IA") {
+            analysisDiv.innerHTML += `<p>¡Felicitaciones! Su empresa es líder en IA, donde la IA es un pilar estratégico que define su modelo de negocio y operaciones. Para mantener esta posición, la inversión continua en investigación, la atracción de talento de élite y el liderazgo en la ética de la IA son esenciales.</p>`;
+        }
+
+        createOrUpdateRadarChart(moduleScores);
+        
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function createOrUpdateRadarChart(userScores) {
+        const ctx = document.getElementById('radar-chart').getContext('2d');
+        const labels = questionsData.map(d => {
+            const words = d.module.split(' ');
+            const labelText = d.module;
+            if (labelText.length > 16 || labelText.includes(' ')) {
+                return labelText.split(' ').join('\n');
+            }
+            return labelText;
+        });
+        
+        if (radarChart) {
+            radarChart.destroy();
+        }
+
+        radarChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Su Puntuación',
+                        data: userScores,
+                        backgroundColor: 'rgba(245, 37, 37, 0.2)', /* LAiB Red with opacity */
+                        borderColor: 'rgb(245, 37, 37)', /* LAiB Red */
+                        pointBackgroundColor: 'rgb(245, 37, 37)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(245, 37, 37)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        pointLabels: {
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            },
+                            color: '#334155' /* slate-700 */
+                        },
+                        ticks: {
+                            beginAtZero: true,
+                            min: 0,
+                            max: 100,
+                            stepSize: 25,
+                            backdropColor: 'rgba(248, 250, 252, 0.75)' /* slate-50 with opacity */
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: '#1a202c',
+                            font: {
+                                size: 14,
+                                weight: '500'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.r !== null) {
+                                    label += context.parsed.r.toFixed(0);
+                                }
+                                return label + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    calculateScoreButton.addEventListener('click', () => {
+        if (!validateCurrentModule()) {
+            validationMessage.classList.remove('hidden');
+            return;
+        }
+        const scores = calculateScores();
+        displayResults(scores);
+    });
+
+    buildTabs();
+    renderModuleContent();
+    updateTabVisuals();
+});
+</script>
+
+</body>
+</html>
