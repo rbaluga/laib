@@ -8,15 +8,18 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- HTML2Canvas and jsPDF for PDF generation -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- Chosen Palette: LAiB Brand Palette (Black, White, Red #F52525) and Complementary Grey Palette -->
-    <!-- Application Structure Plan: He diseñado una aplicación de una sola página con una estructura de "viaje guiado" y un enfoque infográfico para los resultados. Comienza con un cuestionario interactivo organizado en pasos claros con navegación explícita (botones Siguiente/Anterior en lugar de solo pestañas) y validación de progreso. Finalmente, culmina en un panel de resultados dinámico que muestra un score absoluto de 0 a 100 y su nivel de madurez, sin comparaciones con la industria. Este flujo interactivo convierte un documento estático en una herramienta de diagnóstico participativa y altamente visual. La navegación entre pasos guía al usuario, y los resultados comparativos ofrecen un "Product Discovery" avanzado, mostrando la posición de la empresa frente al promedio de la industria. -->
+    <!-- Application Structure Plan: He diseñado una aplicación de una sola página con una estructura de "viaje guiado" y un enfoque infográfico para los resultados. Comienza con un cuestionario interactivo organizado en pasos claros con navegación explícita (botones Siguiente/Anterior en lugar de solo pestañas) y validación de progreso. Finalmente, culmina en un panel de resultados dinámico que muestra un score absoluto de 0 a 100 y su nivel de madurez, sin comparaciones con la industria. Este flujo interactivo convierte un documento estático en una herramienta de diagnóstico participativa y altamente visual. La navegación entre pasos guía al usuario, y los resultados comparativos ofrecen un "Product Discovery" avanzado, mostrando la posición de la empresa frente al promedio de la empresa. -->
     <!-- Visualization & Content Choices:
         - Logo y Branding: Report Info -> Logo LAiB y colores de marca (principal y complementaria). Goal -> Establecer identidad visual. Viz/Presentation Method -> HTML con texto y clases Tailwind para colores. Interaction -> N/A. Justification -> Respetar la identidad de marca es crucial. Library/Method -> HTML, Tailwind CSS.
         - Cuestionario: Report Info -> Preguntas de los 5 módulos. Goal -> Recopilar datos de entrada del usuario de forma guiada. Viz/Presentation Method -> Tarjetas con preguntas y opciones de radio estilizadas, agrupadas por módulo en un flujo paso a paso con botones de navegación. Interaction -> El usuario selecciona una opción por pregunta y avanza/retrocede entre módulos. Los clics se registran en JS. Justification -> El flujo paso a paso es menos abrumador y mejora la tasa de finalización. Library/Method -> HTML, Tailwind CSS, Vanilla JS.
         - Puntuación de Módulos (Absoluta): Report Info -> Scores calculados para cada uno de los 5 módulos del usuario. Goal -> Mostrar el rendimiento relativo entre áreas estratégicas de la propia empresa. Viz/Presentation Method -> Gráfico de Radar con un solo dataset (usuario). Interaction -> El tooltip al pasar el ratón muestra la puntuación exacta. Justification -> Un gráfico de radar es ideal para visualizar múltiples dimensiones, mostrando la "forma" de las fortalezas y debilidades internas. Library/Method -> Chart.js (Canvas).
         - Puntuación General y Nivel: Report Info -> Puntuación general del usuario y nivel de madurez. Goal -> Proporcionar un resumen de alto nivel del rendimiento absoluto. Viz/Presentation Method -> Números grandes y texto descriptivo. Interaction -> N/A. Justification -> Clara y concisa para CEOs, enfocándose en la posición propia de la empresa. Library/Method -> HTML, Tailwind CSS, Vanilla JS.
         - Recomendaciones: Report Info -> Contenido de "De las Respuestas a los Insights". Goal -> Proporcionar orientación y próximos pasos personalizados. Viz/Presentation Method -> Bloques de texto dinámicos. Interaction -> El contenido se genera y muestra en función de las puntuaciones del usuario. Justification -> El texto personalizado basado en las respuestas del usuario hace que los consejos sean relevantes y accionables. Library/Method -> Vanilla JS.
-        - Mobile Friendly & Visual Appeal: Ensure charts and content scale well on all devices. Use responsive design principles (Tailwind's breakpoints, fluid units). Enhance visual "coolness" through subtle styling and clear information hierarchy. Call to action added at the end of results. All blocks are aligned with professional precision, using consistent spacing and shadows.
+        - Mobile Friendly & Visual Appeal: Ensure charts and content scale well on all devices. Use responsive design principles (Tailwind's breakpoints, fluid units). Enhance visual "coolness" through subtle styling and clear information hierarchy. Call to action added at the end of results. All blocks are aligned with professional precision, using consistent spacing and shadows. Added PDF download functionality.
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
@@ -167,6 +170,9 @@
                     <p class="text-2xl font-bold text-slate-800 mb-6">Aplicá ahora y trae el futuro al presente de tu empresa</p>
                     <button class="bg-lab-medium-dark-grey text-white font-bold py-4 px-10 rounded-lg hover:bg-lab-darkest-grey transition duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-lab-medium-dark-grey focus:ring-offset-2 text-lg" onclick="window.location.href='https://form.typeform.com/to/ESKx4jnG'">
                         Aplicar al LAiB
+                    </button>
+                    <button id="download-results-pdf" class="bg-lab-medium-dark-grey text-white font-bold py-4 px-10 rounded-lg hover:bg-lab-darkest-grey transition duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-lab-medium-dark-grey focus:ring-offset-2 text-lg mt-4">
+                        Descargar Resultados (PDF)
                     </button>
                 </div>
             </section>
@@ -540,6 +546,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // Removed createOverallComparisonChart as it's no longer used for display/comparison
+
     calculateScoreButton.addEventListener('click', () => {
         if (!validateCurrentModule()) {
             validationMessage.classList.remove('hidden');
@@ -547,6 +555,61 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const scores = calculateScores();
         displayResults(scores);
+    });
+
+    // Event listener for PDF download button
+    document.getElementById('download-results-pdf').addEventListener('click', async () => {
+        const resultsSection = document.getElementById('results');
+        const originalScrollY = window.scrollY; // Store current scroll position
+
+        // Temporarily scroll to the top of the results section and ensure it's visible for capture
+        resultsSection.scrollIntoView();
+        const originalDisplay = resultsSection.style.display;
+        resultsSection.style.display = 'block';
+
+        // Adjust scale for better quality capture in PDF, e.g., 2 for retina screens
+        const scale = 2; 
+
+        // Capture the results section as a canvas image
+        const canvas = await html2canvas(resultsSection, {
+            scale: scale,
+            useCORS: true, // Needed if you have images from different origins
+            logging: false, // Disables console logs from html2canvas
+            windowWidth: resultsSection.scrollWidth, // Capture full width
+            windowHeight: resultsSection.scrollHeight // Capture full height
+        });
+
+        // Restore original display and scroll position
+        resultsSection.style.display = originalDisplay;
+        window.scrollTo(0, originalScrollY);
+
+        const imgData = canvas.toDataURL('image/png'); // Get image data as PNG
+        const { jsPDF } = window.jspdf; // Get jsPDF object
+
+        // Initialize jsPDF with A4 size in millimeters
+        const pdf = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for millimeters, 'a4' for A4 size
+
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width; // Calculate image height to maintain aspect ratio
+        let heightLeft = imgHeight; // Remaining height to be added to PDF
+
+        let position = 0; // Current Y position on the PDF page
+
+        // Add the first page
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        // Add subsequent pages if content overflows A4 height
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight; // Calculate position for next page
+            pdf.addPage(); // Add a new page
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight); // Add the image
+            heightLeft -= pageHeight; // Update remaining height
+        }
+
+        // Save the PDF
+        pdf.save('IA_Scoring_Reporte.pdf');
     });
 
     buildTabs();
@@ -557,3 +620,4 @@ document.addEventListener('DOMContentLoaded', function () {
 
 </body>
 </html>
+
